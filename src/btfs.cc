@@ -100,13 +100,16 @@ jump(int piece, int size) {
 	cursor = tail;
 
 	int pl = ti.piece_length();
+	int pc = params.on_demand ? 2 : 16;
 
-	for (int b = 0; b < 16 * pl; b += pl) {
+	for (int b = 0; b < pc * pl; b += pl) {
 		handle.piece_priority(tail++, 7);
 	}
 
-	for (int o = (tail - piece) * pl; o < size + pl - 1; o += pl) {
-		handle.piece_priority(tail++, 1);
+	if (!params.on_demand) {
+		for (int o = (tail - piece) * pl; o < size + pl - 1; o += pl) {
+			handle.piece_priority(tail++, 1);
+		}
 	}
 }
 
@@ -272,8 +275,10 @@ handle_piece_finished_alert(libtorrent::piece_finished_alert *a, Log *log) {
 		(*i)->trigger();
 	}
 
-	// Advance sliding window
-	advance();
+	// If not in on-demand mode then advance sliding window
+	if (!params.on_demand) {
+		advance();
+	}
 
 	pthread_mutex_unlock(&lock);
 }
@@ -657,7 +662,7 @@ populate_target(std::string& target, char *arg) {
 		else
 			perror("Failed to expand target");
 
-		free(x);		
+		free(x);
 	} else {
 		perror("Failed to generate target");
 	}
@@ -692,8 +697,8 @@ populate_metadata(libtorrent::add_torrent_params& p, const char *arg) {
 		CURL *ch = curl_easy_init();
 
 		curl_easy_setopt(ch, CURLOPT_URL, uri.c_str());
-		curl_easy_setopt(ch, CURLOPT_WRITEFUNCTION, handle_http); 
-		curl_easy_setopt(ch, CURLOPT_WRITEDATA, (void *) &output); 
+		curl_easy_setopt(ch, CURLOPT_WRITEFUNCTION, handle_http);
+		curl_easy_setopt(ch, CURLOPT_WRITEDATA, (void *) &output);
 		curl_easy_setopt(ch, CURLOPT_USERAGENT, "btfs/" VERSION);
 		curl_easy_setopt(ch, CURLOPT_FOLLOWLOCATION, 1);
 
@@ -774,6 +779,7 @@ static const struct fuse_opt btfs_opts[] = {
 	BTFS_OPT("--max-port=%lu",               max_port,             4),
 	BTFS_OPT("--max-download-rate=%lu",      max_download_rate,    4),
 	BTFS_OPT("--max-upload-rate=%lu",        max_upload_rate,      4),
+	BTFS_OPT("--on-demand",                  on_demand,            1),
 	FUSE_OPT_END
 };
 
@@ -809,6 +815,7 @@ print_help() {
 	printf("    --max-port=N           end of listen port range\n");
 	printf("    --max-download-rate=N  max download rate (in kB/s)\n");
 	printf("    --max-upload-rate=N    max upload rate (in kB/s)\n");
+	printf("    --on-demand            only download pieces on demand\n");
 }
 
 int
